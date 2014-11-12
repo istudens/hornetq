@@ -12,6 +12,7 @@
  */
 package org.hornetq.utils;
 
+import java.security.AccessControlContext;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.concurrent.ThreadFactory;
@@ -36,6 +37,8 @@ public final class HornetQThreadFactory implements ThreadFactory
 
    private final ClassLoader tccl;
 
+   private final AccessControlContext acc;
+
    public HornetQThreadFactory(final String groupName, final boolean daemon, final ClassLoader tccl)
    {
       group = new ThreadGroup(groupName + "-" + System.identityHashCode(this));
@@ -45,6 +48,8 @@ public final class HornetQThreadFactory implements ThreadFactory
       this.tccl = tccl;
 
       this.daemon = daemon;
+
+      this.acc = (System.getSecurityManager() == null) ? null : AccessController.getContext();
    }
 
    public Thread newThread(final Runnable command)
@@ -58,7 +63,30 @@ public final class HornetQThreadFactory implements ThreadFactory
       }
       else
       {
-         t = new Thread(command, "Thread-" + threadCount.getAndIncrement());
+         t = new Thread(new Runnable()
+         {
+            @Override
+            public void run()
+            {
+               AccessController.doPrivileged(new PrivilegedAction<Void>()
+               {
+                  @Override
+                  public Void run()
+                  {
+                     try
+                     {
+                        Thread.currentThread().setContextClassLoader(tccl);
+                     }
+                     catch (java.security.AccessControlException e)
+                     {
+                        HornetQUtilLogger.LOGGER.missingPrivsForClassloader();
+                     }
+                     command.run();
+                     return null;
+                  }
+               }, acc);
+            }
+         }, "Thread-" + threadCount.getAndIncrement());
       }
 
       AccessController.doPrivileged(new PrivilegedAction<Object>()

@@ -51,5 +51,6 @@
       <module>performance-tests</module>
       <module>integration-tests</module>
       <module>byteman-tests</module>
+      <module>secman-tests</module>
    </modules>
 </project>
